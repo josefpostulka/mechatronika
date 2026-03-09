@@ -221,12 +221,10 @@
     let score = 0;
     let wrongAnswers = [];
 
-    // Inicializace po načtení okna (vypíše počet dostupných otázek)
     window.onload = () => {
         document.getElementById('count-mech').innerText = questionsMECH.length;
     };
 
-    // Profesionální náhodné zamíchání (Fisher-Yates)
     function shuffleArray(array) {
         for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -243,13 +241,9 @@
             return;
         }
 
-        // Kopie původního pole
         let sourcePool = [...questionsMECH];
-
-        // Zamíchání všech otázek
         shuffleArray(sourcePool);
         
-        // Oříznutí podle počtu, který uživatel chtěl
         activeQuestions = (countMode === 'all' || sourcePool.length < parseInt(countMode)) 
                             ? sourcePool 
                             : sourcePool.slice(0, parseInt(countMode));
@@ -285,14 +279,22 @@
         const container = document.getElementById('options-container');
         container.innerHTML = '';
 
-        // Detekce nedodělané otázky
-        if (q.correctIndex === 4 || isNaN(q.correctIndex) || (q.options[4] && q.options[4].trim() !== "")) {
+        // ROBUSTNÍ DETEKCE NEDODĚLANÉ OTÁZKY A VÍCE SPRÁVNÝCH ODPOVĚDÍ
+        let isUnfinished = false;
+        if (Array.isArray(q.correctIndex)) {
+            if (q.correctIndex.length === 0) isUnfinished = true;
+        } else {
+            if (q.correctIndex === 4 || isNaN(q.correctIndex)) isUnfinished = true;
+        }
+        if (q.options[4] !== undefined && q.options[4] !== null && String(q.options[4]).trim() !== "") isUnfinished = true;
+
+        if (isUnfinished) {
             const div = document.createElement('div');
             div.className = 'unfinished-wrapper';
             div.innerHTML = '<p class="unfinished-text">⚠️ Nedodělaná otázka</p><p style="color:#856404; margin-top:5px;">V datech chybí správná odpověď. Klikni pro přeskočení.</p>';
             div.onclick = () => { 
                 div.style.opacity = '0.5';
-                score++; // Dá bod zdarma, aby nekazilo skóre
+                score++;
                 document.getElementById('score-live').innerText = "Body: " + score;
                 document.getElementById('next-btn').style.display = 'inline-block'; 
             };
@@ -300,30 +302,34 @@
             return;
         }
 
-        // Uložení textu správné odpovědi před zamícháním
-        const correctAnswerText = q.options[q.correctIndex];
+        // Získání pole textů všech správných odpovědí (i když je jen jedna)
+        let correctTexts = [];
+        if (Array.isArray(q.correctIndex)) {
+            correctTexts = q.correctIndex.map(idx => String(q.options[idx]));
+        } else {
+            correctTexts = [String(q.options[q.correctIndex])];
+        }
 
-        // Příprava objektů pro míchání možností (vynechá prázdné)
+        // Vyfiltrování prázdných odpovědí a určení správnosti
         let answerObjects = q.options
-            .filter(opt => opt && opt.trim() !== "")
+            .filter(opt => opt !== null && opt !== undefined && String(opt).trim() !== "")
             .map(opt => ({
-                text: opt,
-                isCorrect: (opt === correctAnswerText)
+                text: String(opt),
+                isCorrect: correctTexts.includes(String(opt))
             }));
 
-        // Zamíchání možností odpovědí
         shuffleArray(answerObjects);
 
         answerObjects.forEach((answer) => {
             const btn = document.createElement('button');
             btn.className = 'option-btn';
             btn.innerText = answer.text;
-            btn.onclick = () => checkAnswer(answer.isCorrect, btn, answer.text, q, correctAnswerText);
+            btn.onclick = () => checkAnswer(answer.isCorrect, btn, answer.text, q, correctTexts);
             container.appendChild(btn);
         });
     }
 
-    function checkAnswer(isCorrect, btnElement, selectedText, questionObj, correctText) {
+    function checkAnswer(isCorrect, btnElement, selectedText, questionObj, correctTexts) {
         document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
 
         if (isCorrect) {
@@ -331,14 +337,15 @@
             score++;
         } else {
             btnElement.classList.add('wrong');
+            // Zvýrazní zeleně VŠECHNY správné odpovědi
             document.querySelectorAll('.option-btn').forEach(b => { 
-                if (b.innerText === correctText) b.classList.add('correct'); 
+                if (correctTexts.includes(b.innerText)) b.classList.add('correct'); 
             });
             wrongAnswers.push({ 
                 question: questionObj.text, 
                 img: questionObj.img, 
                 userAnswer: selectedText, 
-                correctAnswer: correctText 
+                correctAnswer: correctTexts.join(' nebo ') // Vypíše např: Odpověď A nebo Odpověď B
             });
         }
         document.getElementById('next-btn').style.display = 'inline-block';
@@ -391,9 +398,4 @@
     }
 </script>
 </body>
-
 </html>
-
-
-
-
